@@ -77,7 +77,7 @@ def main(argv = None):
 
         count = 1
         with io.open(output, 'w', encoding='utf8') as fp:
-            sys.stdout.write(f'Downloaded %d {'posts(s)\r' if community else 'comment(s)\r'}' % count)
+            sys.stdout.write(f"Downloaded %d {'posts(s)\r' if community else 'comment(s)\r'}" % count)
             sys.stdout.flush()
             start_time = time.time()
 
@@ -90,7 +90,7 @@ def main(argv = None):
                 comment = None if limit and count >= limit else next(generator, None)  # Note that this is the next comment
                 comment_str = comment_str + ',' if pretty and comment is not None else comment_str
                 print(comment_str.decode('utf-8') if isinstance(comment_str, bytes) else comment_str, file=fp)
-                sys.stdout.write(f'Downloaded %d {'posts(s)\r' if community else 'comment(s)\r'}' % count)
+                sys.stdout.write(f"Downloaded %d {'posts(s)\r' if community else 'comment(s)\r'}" % count)
                 sys.stdout.flush()
                 count += 1
 
