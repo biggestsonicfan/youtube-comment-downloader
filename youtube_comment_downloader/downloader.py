@@ -164,7 +164,7 @@ class YoutubeCommentDownloader:
 
     def get_community(self, community, debug, *args, **kwargs):
         print(community)
-        return self.get_community_from_url(YOUTUBE_COMMUNITY_URL.format(community=f'{community[1:] if community.startswith('@') else community}'), debug, *args, **kwargs)
+        return self.get_community_from_url(YOUTUBE_COMMUNITY_URL.format(community=f"{community[1:] if community.startswith('@') else community}"), debug, *args, **kwargs)
 
     def get_community_from_url(self, community_url, debug=None, sort_by=SORT_BY_RECENT, language=None, sleep=.1):
         response = self.session.get(community_url)
