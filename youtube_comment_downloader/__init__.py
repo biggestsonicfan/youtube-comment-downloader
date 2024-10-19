@@ -29,6 +29,8 @@ def main(argv = None):
     parser.add_argument('--language', '-a', type=str, default=None, help='Language for Youtube generated text (e.g. en)')
     parser.add_argument('--sort', '-s', type=int, default=SORT_BY_RECENT,
                         help='Whether to download popular (0) or recent comments (1). Defaults to 1')
+    parser.add_argument('--debug', '-d', action='store_true', help="Ouput debugging files to help diagnose issues.")
+    parser.add_argument('--community', '-c', help='Youtube username for which to download Community posts' )
 
     try:
         args = parser.parse_args() if argv is None else parser.parse_args(argv)
@@ -38,8 +40,9 @@ def main(argv = None):
         output = args.output
         limit = args.limit
         pretty = args.pretty
+        community = args.community
 
-        if (not youtube_id and not youtube_url) or not output:
+        if (not youtube_id and not youtube_url and not community) or not output:
             parser.print_usage()
             raise ValueError('you need to specify a Youtube ID/URL and an output filename')
 
@@ -48,17 +51,33 @@ def main(argv = None):
             if not os.path.exists(outdir):
                 os.makedirs(outdir)
 
-        print('Downloading Youtube comments for', youtube_id or youtube_url)
-        downloader = YoutubeCommentDownloader()
-        generator = (
-            downloader.get_comments(youtube_id, args.sort, args.language)
-            if youtube_id
-            else downloader.get_comments_from_url(youtube_url, args.sort, args.language)
-        )
+        if args.debug:
+            print("== Verbose Debug Output Enabled ==")
+            args.debug = os.path.join("debug", f"{time.strftime('%y-%m-%d-%H-%M-%S')}")
+            try:
+                os.makedirs(f"{args.debug}")
+                print(f"Making directory for debug output analysis: {args.debug}")
+            except FileExistsError:
+                print("Using existing debug folder")
+
+        if youtube_id or youtube_url:
+            print('Downloading Youtube comments for', youtube_id or youtube_url)
+            downloader = YoutubeCommentDownloader()
+            generator = (
+                downloader.get_comments(youtube_id, args.debug, args.sort, args.language)
+                if youtube_id
+                else downloader.get_comments_from_url(youtube_url, args.debug, args.sort, args.language)
+            )
+        elif community:
+            print('Downloading Youtube Community for', community)
+            downloader = YoutubeCommentDownloader()
+            generator = (
+                downloader.get_community(community, args.debug, args.sort, args.language)
+            )
 
         count = 1
         with io.open(output, 'w', encoding='utf8') as fp:
-            sys.stdout.write('Downloaded %d comment(s)\r' % count)
+            sys.stdout.write(f'Downloaded %d {'posts(s)\r' if community else 'comment(s)\r'}' % count)
             sys.stdout.flush()
             start_time = time.time()
 
@@ -71,7 +90,7 @@ def main(argv = None):
                 comment = None if limit and count >= limit else next(generator, None)  # Note that this is the next comment
                 comment_str = comment_str + ',' if pretty and comment is not None else comment_str
                 print(comment_str.decode('utf-8') if isinstance(comment_str, bytes) else comment_str, file=fp)
-                sys.stdout.write('Downloaded %d comment(s)\r' % count)
+                sys.stdout.write(f'Downloaded %d {'posts(s)\r' if community else 'comment(s)\r'}' % count)
                 sys.stdout.flush()
                 count += 1
 

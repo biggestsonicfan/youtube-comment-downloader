@@ -24,7 +24,9 @@ Download Youtube comments without using the Youtube API
 
 optional arguments:
   --help, -h                             Show this help message and exit
+  --debug, -d                            Output incremental scraping data to a debug folder for analysis
   --youtubeid YOUTUBEID, -y YOUTUBEID    ID of Youtube video for which to download the comments
+  --community COMMUNITY, -c COMMUNITY    Name of Youtbe user to download community posts from
   --url URL, -u URL                      Youtube URL for which to download the comments
   --output OUTPUT, -o OUTPUT             Output filename (output format is line delimited JSON)
   --pretty, -p                           Change the output format to indented JSON
@@ -33,7 +35,7 @@ optional arguments:
   --sort SORT, -s SORT                   Whether to download popular (0) or recent comments (1). Defaults to 1
 ```
 
-For example:
+#### Downloading Comments
 ```
 youtube-comment-downloader --url https://www.youtube.com/watch?v=ScMzIvxBSi4 --output ScMzIvxBSi4.json
 ```
@@ -44,6 +46,16 @@ youtube-comment-downloader --youtubeid ScMzIvxBSi4 --output ScMzIvxBSi4.json
 
 For Youtube IDs starting with - (dash) you will need to run the script with:
 `-y=idwithdash` or `--youtubeid=idwithdash`
+
+#### Downloading Community Posts
+```
+youtube-comment-downloader --community RickAstleyYT
+```
+
+For Youtube users starting with @ you will need to use quotes:
+```
+youtube-comment-downloader -c "@RickAstleyYT"
+```
 
 
 ### Usage as library
