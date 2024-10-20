@@ -5,7 +5,7 @@ import os
 import sys
 import time
 import re
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urljoin, urlparse, parse_qs
 
 from .downloader import YoutubeCommentDownloader, SORT_BY_POPULAR, SORT_BY_RECENT
 
@@ -47,8 +47,9 @@ def main(argv = None):
                     sys.argv.extend(['-y', match.group(2)])
                     sys.argv.extend(['-o', f"{match.group(2)}.json"])
                 if youtube_url.netloc == "youtu.be":
-                    sys.argv.extend(['-y', youtube_url.path.lstrip('/')])
-                    sys.argv.extend(['-o', f"{youtube_url.path.lstrip('/')}.json"])
+                    parsed_url = f"{youtube_url.path.lstrip('/')[:youtube_url.path.lstrip('/').find('&')] if '&' in youtube_url.path else youtube_url.path.lstrip('/')}"
+                    sys.argv.extend(['-y', parsed_url])
+                    sys.argv.extend(['-o', f"{parsed_url}.json"])
 
         args = parser.parse_args() if argv is None else parser.parse_args(argv)
 
