@@ -4,6 +4,8 @@ import json
 import os
 import sys
 import time
+import re
+from urllib.parse import urlparse, parse_qs
 
 from .downloader import YoutubeCommentDownloader, SORT_BY_POPULAR, SORT_BY_RECENT
 
@@ -31,6 +33,23 @@ def main(argv = None):
                         help='Whether to download popular (0) or recent comments (1). Defaults to 1')
 
     try:
+        # Check if only a Youtube url has been passed
+        if len(sys.argv) == 2:
+            youtube_url = urlparse(sys.argv.pop(1))
+            if "youtube.com" in youtube_url.netloc or "youtu.be" in youtube_url.netloc:
+                if "watch" in youtube_url.path:
+                    query_params = parse_qs(youtube_url.query)
+                    if 'v' in query_params:
+                        sys.argv.extend(['-y', query_params['v'][0]])
+                        sys.argv.extend(['-o', f"{query_params['v'][0]}.json"])
+                match = re.search(r"(v|e|embed|shorts|live|watch)/([\w-]{11})", youtube_url.path)
+                if match:
+                    sys.argv.extend(['-y', match.group(2)])
+                    sys.argv.extend(['-o', f"{match.group(2)}.json"])
+                if youtube_url.netloc == "youtu.be":
+                    sys.argv.extend(['-y', youtube_url.path.lstrip('/')])
+                    sys.argv.extend(['-o', f"{youtube_url.path.lstrip('/')}.json"])
+
         args = parser.parse_args() if argv is None else parser.parse_args(argv)
 
         youtube_id = args.youtubeid
@@ -73,11 +92,12 @@ def main(argv = None):
                 print(comment_str.decode('utf-8') if isinstance(comment_str, bytes) else comment_str, file=fp)
                 sys.stdout.write('Downloaded %d comment(s)\r' % count)
                 sys.stdout.flush()
-                count += 1
+                if comment is not None:
+                    count += 1
 
             if pretty:
                 fp.write(' ' * INDENT +']\n}')
-        print('\n[{:.2f} seconds] Done!'.format(time.time() - start_time))
+        print(f"\nDone! {count} comments saved to {output} in {(time.time() - start_time):.2f} seconds")
 
     except Exception as e:
         print('Error:', str(e))
