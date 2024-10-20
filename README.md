@@ -45,6 +45,17 @@ youtube-comment-downloader --youtubeid ScMzIvxBSi4 --output ScMzIvxBSi4.json
 For Youtube IDs starting with - (dash) you will need to run the script with:
 `-y=idwithdash` or `--youtubeid=idwithdash`
 
+### Additionally
+You can pass just a valid Youtube url and the comment data will be saved as the Youtube video's ID
+```
+youtube-comment-downloader https://www.youtube.com/watch?v=lalOy8Mbfdc
+```
+```
+youtube-comment-downloader http://www.youtube.com/watch?v=ishbTyLs6ps&list=PLGup6kBfcU7Le5laEaCLgTKtlDcxMqGxZ&index=106&shuffle=2655
+```
+```
+youtube-comment-downloader http://youtu.be/dQw4w9WgXcQ?feature=youtube_gdata_player
+```
 
 ### Usage as library
 You can also use this script as a library. For instance, if you want to print out the 10 most popular comments for a particular Youtube video you can do the following:
