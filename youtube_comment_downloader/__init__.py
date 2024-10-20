@@ -31,6 +31,8 @@ def main(argv = None):
                         help='Whether to download popular (0) or recent comments (1). Defaults to 1')
     parser.add_argument('--debug', '-d', action='store_true', help="Ouput debugging files to help diagnose issues.")
     parser.add_argument('--community', '-c', help='Youtube username for which to download Community posts' )
+    parser.add_argument('--cookies', '-e', type=str, default=None, help='Use a Netscape HTTP Cookie File with your requests')
+    parser.add_argument('--useragent', '-t', type=str, default=None, help='Use custom User Agent (to be used with Cookies)')
 
     try:
         args = parser.parse_args() if argv is None else parser.parse_args(argv)
@@ -41,6 +43,8 @@ def main(argv = None):
         limit = args.limit
         pretty = args.pretty
         community = args.community
+        user_agent = args.useragent
+        cookie_file = args.cookies
 
         if (not youtube_id and not youtube_url and not community) or not output:
             parser.print_usage()
@@ -60,9 +64,11 @@ def main(argv = None):
             except FileExistsError:
                 print("Using existing debug folder")
 
+        downloader = YoutubeCommentDownloader()
+        if cookie_file and user_agent:
+            downloader.use_cookies(cookie_file, user_agent)        
         if youtube_id or youtube_url:
             print('Downloading Youtube comments for', youtube_id or youtube_url)
-            downloader = YoutubeCommentDownloader()
             generator = (
                 downloader.get_comments(youtube_id, args.debug, args.sort, args.language)
                 if youtube_id
@@ -70,7 +76,6 @@ def main(argv = None):
             )
         elif community:
             print('Downloading Youtube Community for', community)
-            downloader = YoutubeCommentDownloader()
             generator = (
                 downloader.get_community(community, args.debug, args.sort, args.language)
             )

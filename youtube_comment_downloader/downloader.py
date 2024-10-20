@@ -3,6 +3,8 @@ from __future__ import print_function
 import json
 import re
 import time
+import types
+import http.cookiejar
 
 import dateparser
 import requests
@@ -27,6 +29,17 @@ class YoutubeCommentDownloader:
         self.session = requests.Session()
         self.session.headers['User-Agent'] = USER_AGENT
         self.session.cookies.set('CONSENT', 'YES+cb', domain='.youtube.com')
+
+    def use_cookies(self, cookie_file, cookie_useragent):
+        cookiejar = http.cookiejar.MozillaCookieJar(cookie_file)
+        try:
+            cookiejar.load(ignore_discard=True, ignore_expires=True)
+            self.session.cookies.update(cookiejar)
+            self.session.headers['User-Agent'] = cookie_useragent
+        except FileNotFoundError:
+            print(f"Cookie file '{cookie_file}' not found.")
+        except Exception as e:
+            print(f"Error loading cookies: {e}")
 
     def ajax_request(self, endpoint, ytcfg, retries=5, sleep=20, timeout=60):
         url = 'https://www.youtube.com' + endpoint['commandMetadata']['webCommandMetadata']['apiUrl']
@@ -74,14 +87,46 @@ class YoutubeCommentDownloader:
         if debug:
             with open(f"{debug}/ytInitialData.json", 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=4)
+        # Old code:
+        #item_section = next(self.search_dict(data, 'itemSectionRenderer'), None)
 
-        item_section = next(self.search_dict(data, 'itemSectionRenderer'), None)
-        renderer = next(self.search_dict(item_section, 'continuationItemRenderer'), None) if item_section else None
+        item_section = self.search_dict(data, 'itemSectionRenderer')
+        for item in item_section:
+            if "targetId" in item and "sectionIdentifier" in item:
+                if item['targetId'] == "engagement-panel-comments-section" and item['sectionIdentifier'] == "comment-item-section":
+                    item_section = item
+                    break
+
+        # Old code:
+        #renderer = next(self.search_dict(item_section, 'continuationItemRenderer'), None) if item_section else None
+
+        renderer = self.search_dict(item_section, 'continuationItemRenderer')
+        for render in renderer:
+            if "sectionIdentifier" in render and "targetId" in render:
+                if render["sectionIdentifier"] == "comment-item-section" and render["targetId"] == "engagement-panel-comments-section":
+                    renderer = render
+                    break
         if not renderer:
             # Comments disabled?
             return
 
-        sort_menu = next(self.search_dict(data, 'sortFilterSubMenuRenderer'), {}).get('subMenuItems', [])
+        # Old code:
+        # sort_menu = next(self.search_dict(data, 'sortFilterSubMenuRenderer'), {}).get('subMenuItems', [])
+        sort_menu = self.search_dict(data.get('engagementPanels', []), 'sortFilterSubMenuRenderer')
+        menu_count = 0
+        for menu in sort_menu:
+            submenu = menu.get('subMenuItems', [])
+            if debug:
+                with open(f"{debug}/sortMenuData_{menu_count}.json", 'w', encoding='utf-8') as f:
+                    json.dump(submenu, f, ensure_ascii=False, indent=4)
+                menu_count += 1
+            if "title" in submenu[0]:
+                if submenu[0]["title"] == "Top comments":
+                    sort_menu = submenu
+                    break
+        if isinstance(sort_menu, types.GeneratorType):
+            raise RuntimeError('Failed to get sort_menu (Maybe cookie expired?)')
+
         if not sort_menu:
             # No sort menu. Maybe this is a request for community posts?
             section_list = next(self.search_dict(data, 'sectionListRenderer'), {})
@@ -96,7 +141,13 @@ class YoutubeCommentDownloader:
         continuation_count = 0
         while continuations:
             continuation = continuations.pop()
+            if debug:
+                with open(f"{debug}/continuationData_{continuation_count}.json", 'w', encoding='utf-8') as f:
+                    json.dump(continuation, f, ensure_ascii=False, indent=4)
             response = self.ajax_request(continuation, ytcfg)
+            if debug:
+                with open(f"{debug}/continuationResponse_{continuation_count}.json", 'w', encoding='utf-8') as f:
+                    json.dump(response, f, ensure_ascii=False, indent=4)
 
             if not response:
                 break
@@ -107,6 +158,8 @@ class YoutubeCommentDownloader:
 
             actions = list(self.search_dict(response, 'reloadContinuationItemsCommand')) + \
                       list(self.search_dict(response, 'appendContinuationItemsAction'))
+            if debug:
+                print(f"Actions to take: {len(actions)}")
             for action in actions:
                 for item in action.get('continuationItems', []):
                     if debug:
@@ -163,7 +216,6 @@ class YoutubeCommentDownloader:
             time.sleep(sleep)
 
     def get_community(self, community, debug, *args, **kwargs):
-        print(community)
         return self.get_community_from_url(YOUTUBE_COMMUNITY_URL.format(community=f"{community[1:] if community.startswith('@') else community}"), debug, *args, **kwargs)
 
     def get_community_from_url(self, community_url, debug=None, sort_by=SORT_BY_RECENT, language=None, sleep=.1):
@@ -195,8 +247,13 @@ class YoutubeCommentDownloader:
                 json.dump(data, f, ensure_ascii=False, indent=4)
 
         item_section = self.search_dict(data, 'itemSectionRenderer')
+        with open(f"{debug}/itemSection_{item_section.indexof(item)}.json", 'w', encoding='utf-8') as f:
+            json.dump(item, f, ensure_ascii=False, indent=4)
         for item in item_section:
             if "sectionIdentifier" in item:
+                if debug:
+                    with open(f"{debug}/itemSection_{item_section.indexof(item)}.json", 'w', encoding='utf-8') as f:
+                        json.dump(item, f, ensure_ascii=False, indent=4)
                 if item['sectionIdentifier'] == "backstage-item-section":
                     item_section = item
         renderer = next(self.search_dict(item_section, 'continuationItemRenderer'), None) if item_section else None
@@ -205,7 +262,7 @@ class YoutubeCommentDownloader:
             return
 
         continuations = [renderer['continuationEndpoint']]
-        
+
         continuation_count = 0
         while continuations:
             continuation = continuations.pop()
@@ -251,3 +308,4 @@ class YoutubeCommentDownloader:
                         stack.append(value)
             elif isinstance(current_item, list):
                 stack.extend(current_item)
+                
