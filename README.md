@@ -12,7 +12,7 @@ pip install youtube-comment-downloader
 Or directly from the GitHub repository:
 
 ```
-pip install https://github.com/egbertbouman/youtube-comment-downloader/archive/master.zip
+pip install https://github.com/biggestsonicfan/youtube-comment-downloader/archive/normalize-id-output.zip
 ```
 
 ### Usage as command-line interface
