@@ -57,7 +57,11 @@ def main(argv = None):
 
         if args.debug:
             print("== Verbose Debug Output Enabled ==")
-            args.debug = os.path.join("debug", f"{time.strftime('%y-%m-%d-%H-%M-%S')}")
+            if youtube_id:
+                args.debug = os.path.join("debug", f"{youtube_id}", f"{time.strftime('%y-%m-%d-%H-%M-%S')}")
+            else:
+
+                args.debug = os.path.join("debug", f"{time.strftime('%y-%m-%d-%H-%M-%S')}")
             try:
                 os.makedirs(f"{args.debug}")
                 print(f"Making directory for debug output analysis: {args.debug}")

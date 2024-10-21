@@ -86,7 +86,7 @@ class YoutubeCommentDownloader:
         ytcfg = json.loads(self.regex_search(html, YT_CFG_RE, default=''))
         if not ytcfg:
             return  # Unable to extract configuration
-        elif debug:
+        else:
             self.debug_log(debug, "ytcfg.json", ytcfg)
         if language:
             ytcfg['INNERTUBE_CONTEXT']['client']['hl'] = language
@@ -95,37 +95,26 @@ class YoutubeCommentDownloader:
         self.debug_log(debug, "ytInitialData.json", data)
         # Old code:
         #item_section = next(self.search_dict(data, 'itemSectionRenderer'), None)
-
         item_section = self.search_dict(data, 'itemSectionRenderer')
+        item_count = 0
         for item in item_section:
+            self.debug_log(debug, f"item_{item_count}.json", item)
+            item_count += 1
             if "targetId" in item and "sectionIdentifier" in item:
                 if item['targetId'] == "engagement-panel-comments-section" and item['sectionIdentifier'] == "comment-item-section":
                     item_section = item
                     break
 
-                #Used for Membership Videos
-                # elif item['targetId'] == "comments-section" and item['sectionIdentifier'] == "comment-item-section":
-                #     item_section = item
-                #     #Load comments
-                #     break
-            elif "sectionIdentifier" in item:
-                if item['sectionIdentifier'] == "comments-entry-point":
-                    item_section = item
-                    break
-
-        self.debug_log(debug, "itemSection.json", item_section)       
         # Old code:
         #renderer = next(self.search_dict(item_section, 'continuationItemRenderer'), None) if item_section else None
 
         if item_section:
+            self.debug_log(debug, "itemSection.json", item_section) 
             renderer = self.search_dict(item_section, 'continuationItemRenderer')
             renderer_count = 0
-            test_render = None
             for render in renderer:
-                self.debug_log(debug, f"renderer_{renderer_count}.json", render) 
-                if debug:
-                    test_render = render  
-                    renderer_count += 1
+                self.debug_log(debug, f"rendererData_{renderer_count}.json", render) 
+                renderer_count += 1
                 if "sectionIdentifier" in render and "targetId" in render:
                     if render["sectionIdentifier"] == "comment-item-section" and render["targetId"] == "engagement-panel-comments-section":
                         renderer = render
@@ -140,11 +129,6 @@ class YoutubeCommentDownloader:
                     sys.stdout.write(f"No comment renderer could be found?          \r")
                     sys.stdout.flush()
                     return
-
-        # Render comments here?
-        if debug:
-            render_results = self.ajax_request(test_render['continuationEndpoint'], ytcfg)
-            self.debug_log(debug, "rendererResults.json", render_results)
         # Old code:
         # sort_menu = next(self.search_dict(data, 'sortFilterSubMenuRenderer'), {}).get('subMenuItems', [])
         sort_menu = self.search_dict(data.get('engagementPanels', []), 'sortFilterSubMenuRenderer')
@@ -170,6 +154,7 @@ class YoutubeCommentDownloader:
         if not sort_menu or sort_by >= len(sort_menu):
             raise RuntimeError('Failed to set sorting')
         continuations = [sort_menu[sort_by]['serviceEndpoint']]
+        self.debug_log(debug, "continuations.json", continuations)
 
         continuation_count = 0
         while continuations:
