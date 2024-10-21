@@ -3,11 +3,16 @@ from __future__ import print_function
 import json
 import re
 import time
-import types
 import http.cookiejar
 
 import dateparser
 import requests
+
+# Debugging Imports
+import sys
+import types
+import http.cookiejar
+from bs4 import BeautifulSoup
 
 YOUTUBE_VIDEO_URL = 'https://www.youtube.com/watch?v={youtube_id}'
 YOUTUBE_CONSENT_URL = 'https://consent.youtube.com/save'
@@ -37,9 +42,11 @@ class YoutubeCommentDownloader:
             self.session.cookies.update(cookiejar)
             self.session.headers['User-Agent'] = cookie_useragent
         except FileNotFoundError:
-            print(f"Cookie file '{cookie_file}' not found.")
+            sys.stdout.write(f"Cookie file '{cookie_file}' not found.          \r")
+            sys.stdout.flush()
         except Exception as e:
-            print(f"Error loading cookies: {e}")
+            sys.stdout.write(f"Error loading cookies: {e}          \r")
+            sys.stdout.flush()
 
     def ajax_request(self, endpoint, ytcfg, retries=5, sleep=20, timeout=60):
         url = 'https://www.youtube.com' + endpoint['commandMetadata']['webCommandMetadata']['apiUrl']
@@ -72,21 +79,20 @@ class YoutubeCommentDownloader:
 
         html = response.text
         if debug:
-            with open(f"{debug}/ytResponse.html", 'w', encoding='utf-8') as f:
-                f.write(html)
+            soup = BeautifulSoup(response.content, 'html.parser', from_encoding="utf8")
+            with open(f"{debug}/ytResponse.html", "w", encoding='utf-8') as file:
+                file.write(str(soup.prettify()))
+
         ytcfg = json.loads(self.regex_search(html, YT_CFG_RE, default=''))
         if not ytcfg:
             return  # Unable to extract configuration
         elif debug:
-            with open(f"{debug}/ytcfg.json", 'w', encoding='utf-8') as f:
-                json.dump(ytcfg, f, ensure_ascii=False, indent=4)
+            self.debug_log(debug, "ytcfg.json", ytcfg)
         if language:
             ytcfg['INNERTUBE_CONTEXT']['client']['hl'] = language
 
         data = json.loads(self.regex_search(html, YT_INITIAL_DATA_RE, default=''))
-        if debug:
-            with open(f"{debug}/ytInitialData.json", 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=4)
+        self.debug_log(debug, "ytInitialData.json", data)
         # Old code:
         #item_section = next(self.search_dict(data, 'itemSectionRenderer'), None)
 
@@ -97,29 +103,56 @@ class YoutubeCommentDownloader:
                     item_section = item
                     break
 
+                #Used for Membership Videos
+                # elif item['targetId'] == "comments-section" and item['sectionIdentifier'] == "comment-item-section":
+                #     item_section = item
+                #     #Load comments
+                #     break
+            elif "sectionIdentifier" in item:
+                if item['sectionIdentifier'] == "comments-entry-point":
+                    item_section = item
+                    break
+
+        self.debug_log(debug, "itemSection.json", item_section)       
         # Old code:
         #renderer = next(self.search_dict(item_section, 'continuationItemRenderer'), None) if item_section else None
 
-        renderer = self.search_dict(item_section, 'continuationItemRenderer')
-        for render in renderer:
-            if "sectionIdentifier" in render and "targetId" in render:
-                if render["sectionIdentifier"] == "comment-item-section" and render["targetId"] == "engagement-panel-comments-section":
-                    renderer = render
-                    break
-        if not renderer:
-            # Comments disabled?
-            return
+        if item_section:
+            renderer = self.search_dict(item_section, 'continuationItemRenderer')
+            renderer_count = 0
+            test_render = None
+            for render in renderer:
+                self.debug_log(debug, f"renderer_{renderer_count}.json", render) 
+                if debug:
+                    test_render = render  
+                    renderer_count += 1
+                if "sectionIdentifier" in render and "targetId" in render:
+                    if render["sectionIdentifier"] == "comment-item-section" and render["targetId"] == "engagement-panel-comments-section":
+                        renderer = render
+                        break
+            if not renderer:
+                # Comments disabled? Or attempt to find a coment renderer...
+                renderer = self.search_dict(data, 'commentsEntryPointHeaderRenderer')
+                for render in renderer:
+                    self.debug_log(debug, f"renderer_{renderer_count}.json", render)
+                    renderer_count += 1
+                if not renderer:
+                    sys.stdout.write(f"No comment renderer could be found?          \r")
+                    sys.stdout.flush()
+                    return
 
+        # Render comments here?
+        if debug:
+            render_results = self.ajax_request(test_render['continuationEndpoint'], ytcfg)
+            self.debug_log(debug, "rendererResults.json", render_results)
         # Old code:
         # sort_menu = next(self.search_dict(data, 'sortFilterSubMenuRenderer'), {}).get('subMenuItems', [])
         sort_menu = self.search_dict(data.get('engagementPanels', []), 'sortFilterSubMenuRenderer')
         menu_count = 0
         for menu in sort_menu:
             submenu = menu.get('subMenuItems', [])
-            if debug:
-                with open(f"{debug}/sortMenuData_{menu_count}.json", 'w', encoding='utf-8') as f:
-                    json.dump(submenu, f, ensure_ascii=False, indent=4)
-                menu_count += 1
+            self.debug_log(debug, f"sortMenuData_{menu_count}.json", submenu)
+            menu_count += 1
             if "title" in submenu[0]:
                 if submenu[0]["title"] == "Top comments":
                     sort_menu = submenu
@@ -141,13 +174,9 @@ class YoutubeCommentDownloader:
         continuation_count = 0
         while continuations:
             continuation = continuations.pop()
-            if debug:
-                with open(f"{debug}/continuationData_{continuation_count}.json", 'w', encoding='utf-8') as f:
-                    json.dump(continuation, f, ensure_ascii=False, indent=4)
+            self.debug_log(debug, f"continuationData_{continuation_count}.json", continuation)
             response = self.ajax_request(continuation, ytcfg)
-            if debug:
-                with open(f"{debug}/continuationResponse_{continuation_count}.json", 'w', encoding='utf-8') as f:
-                    json.dump(response, f, ensure_ascii=False, indent=4)
+            self.debug_log(debug, f"continuationResponse_{continuation_count}.json", response)
 
             if not response:
                 break
@@ -159,12 +188,12 @@ class YoutubeCommentDownloader:
             actions = list(self.search_dict(response, 'reloadContinuationItemsCommand')) + \
                       list(self.search_dict(response, 'appendContinuationItemsAction'))
             if debug:
-                print(f"Actions to take: {len(actions)}")
+                sys.stdout.write(f"Actions to take: {len(actions)}          \r")
+                sys.stdout.flush()
+                time.sleep(1)
             for action in actions:
                 for item in action.get('continuationItems', []):
-                    if debug:
-                        with open(f"{debug}/{continuation_count}_action_{actions.index(action)}_Item_{action.get('continuationItems', []).index(item)}.json", 'w', encoding='utf-8') as f:
-                            json.dump(actions, f, ensure_ascii=False, indent=4)
+                    self.debug_log(debug, f"{continuation_count}_action_{actions.index(action)}_Item_{action.get('continuationItems', []).index(item)}.json", item)
                     if action['targetId'] in ['comments-section',
                                               'engagement-panel-comments-section',
                                               'shorts-engagement-panel-comments-section']:
@@ -228,32 +257,26 @@ class YoutubeCommentDownloader:
 
         html = response.text
         if debug:
-            with open(f"{debug}/ytResponse.html", 'w', encoding='utf-8') as f:
-                f.write(html)
+            soup = BeautifulSoup(response.content, 'html.parser', from_encoding="utf8")
+            with open(f"{debug}/ytResponse.html", "w", encoding='utf-8') as file:
+                file.write(str(soup.prettify()))
 
         ytcfg = json.loads(self.regex_search(html, YT_CFG_RE, default=''))
         if not ytcfg:
             return  # Unable to extract configuration
-        elif debug:
-            with open(f"{debug}/ytcfg.json", 'w', encoding='utf-8') as f:
-                json.dump(ytcfg, f, ensure_ascii=False, indent=4)
+        self.debug_log(debug, "ytcfg.json", ytcfg)
 
         if language:
             ytcfg['INNERTUBE_CONTEXT']['client']['hl'] = language
 
         data = json.loads(self.regex_search(html, YT_INITIAL_DATA_RE, default=''))
-        if debug:
-            with open(f"{debug}/ytInitialData.json", 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=4)
+        self.debug_log(debug, "ytInitialData.json", data)
 
         item_section = self.search_dict(data, 'itemSectionRenderer')
-        with open(f"{debug}/itemSection_{item_section.indexof(item)}.json", 'w', encoding='utf-8') as f:
-            json.dump(item, f, ensure_ascii=False, indent=4)
+        self.debug_log(debug, "itemSection.json", item_section)
         for item in item_section:
             if "sectionIdentifier" in item:
-                if debug:
-                    with open(f"{debug}/itemSection_{item_section.indexof(item)}.json", 'w', encoding='utf-8') as f:
-                        json.dump(item, f, ensure_ascii=False, indent=4)
+                self.debug_log(debug, f"itemSection_{item_section.indexof(item)}.json", item)
                 if item['sectionIdentifier'] == "backstage-item-section":
                     item_section = item
         renderer = next(self.search_dict(item_section, 'continuationItemRenderer'), None) if item_section else None
@@ -279,9 +302,7 @@ class YoutubeCommentDownloader:
                       list(self.search_dict(response, 'appendContinuationItemsAction'))
             for action in actions:
                 for item in action.get('continuationItems', []):
-                    if debug:
-                        with open(f"{debug}/{continuation_count}_action_{actions.index(action)}_Item_{action.get('continuationItems', []).index(item)}.json", 'w', encoding='utf-8') as f:
-                            json.dump(actions, f, ensure_ascii=False, indent=4)
+                    self.debug_log(debug, f"{continuation_count}_action_{actions.index(action)}_Item_{action.get('continuationItems', []).index(item)}.json", item)
                     if action['targetId']:
                         # Process continuations for comments and replies.
                         continuations[:0] = [ep for ep in self.search_dict(item, 'continuationEndpoint')]
@@ -308,4 +329,8 @@ class YoutubeCommentDownloader:
                         stack.append(value)
             elif isinstance(current_item, list):
                 stack.extend(current_item)
-                
+    @staticmethod
+    def debug_log(debug, file_name, json_data):
+        if debug:
+            with open(f"{debug}/{file_name}", 'w', encoding='utf-8') as f:
+                json.dump(json_data, f, ensure_ascii=False, indent=4)

@@ -58,3 +58,9 @@ target/
 
 # emacs
 *~
+
+# Debug
+*.json
+cookies.txt
+.venv/
+debug/
