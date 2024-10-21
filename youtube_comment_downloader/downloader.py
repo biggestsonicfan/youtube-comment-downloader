@@ -12,7 +12,6 @@ import requests
 import sys
 import types
 import http.cookiejar
-from bs4 import BeautifulSoup
 
 YOUTUBE_VIDEO_URL = 'https://www.youtube.com/watch?v={youtube_id}'
 YOUTUBE_CONSENT_URL = 'https://consent.youtube.com/save'
@@ -79,9 +78,8 @@ class YoutubeCommentDownloader:
 
         html = response.text
         if debug:
-            soup = BeautifulSoup(response.content, 'html.parser', from_encoding="utf8")
             with open(f"{debug}/ytResponse.html", "w", encoding='utf-8') as file:
-                file.write(str(soup.prettify()))
+                file.write(html)
 
         ytcfg = json.loads(self.regex_search(html, YT_CFG_RE, default=''))
         if not ytcfg:
